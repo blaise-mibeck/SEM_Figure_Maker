@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Project App="AIM" NavCamOverviewPath="NavCam Overview.tiff">
+  <FileFormatVersion>1</FileFormatVersion>
+  <Areas>
+    <Area Descriptor="Area 1" ResultPath="Area 1\DZI\image.dzi" ResultType="Dzi">
+      <Geometry Type="Rectangle">
+        <Center>
+          <x>0.01607426047626074</x>
+          <y>0.01420086734234079</y>
+        </Center>
+        <Size>
+          <Width>0.007503854455750837</Width>
+          <Height>0.007264878199198268</Height>
+        </Size>
+        <Rotation>0</Rotation>
+      </Geometry>
+    </Area>
+  </Areas>
+</Project>
