@@ -339,6 +339,11 @@ class ImageGridView(QWidget):
         # This will be connected to the controller
         print(f"Box drawn at row {row}, col {col}: {rect.x():.2f}, {rect.y():.2f}, {rect.width():.2f}, {rect.height():.2f}")
     
+    def set_border_color(self, index, color):
+        """Set border color for a specific image."""
+        if 0 <= index < len(self.image_widgets):
+            self.image_widgets[index].setStyleSheet(f"border: 2px solid {color};")
+            
     def clear_all(self) -> None:
         """Clear all images"""
         for widget in self.image_widgets:
