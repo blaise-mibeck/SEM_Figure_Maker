@@ -1,11 +1,8 @@
-
-from typing import Dict, Optional, Tuple
 from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, 
-                           QTextEdit, QPushButton, QDialogButtonBox, QFileDialog,
-                           QFormLayout, QGroupBox, QComboBox, QSpinBox, QCheckBox,
-                           QMainWindow, QWidget)  # <-- Added QMainWindow here
+                            QTextEdit, QPushButton, QDialogButtonBox, QFileDialog,
+                            QFormLayout, QGroupBox, QComboBox, QSpinBox, QCheckBox, QMainWindow, QWidget)
 from PyQt5.QtCore import Qt
-# Import ImageGridView from view_classes
+from typing import Dict, Optional, Tuple
 from view_classes import ImageGridView
 
 class SampleInfoDialog(QDialog):
@@ -26,7 +23,14 @@ class SampleInfoDialog(QDialog):
         # Sample ID (pre-filled with folder name)
         self.sample_id_edit = QLineEdit()
         if folder_name:
-            self.sample_id_edit.setText(folder_name)
+            # Try to extract prefix from folder name (e.g., SEM1-123)
+            import re
+            folder_match = re.search(r'(SEM\d+-\d+)', folder_name)
+            if folder_match:
+                prefix = folder_match.group(1)
+                self.sample_id_edit.setText(prefix)
+            else:
+                self.sample_id_edit.setText(folder_name)
         form_layout.addRow("Sample ID:", self.sample_id_edit)
         
         # Preparation method

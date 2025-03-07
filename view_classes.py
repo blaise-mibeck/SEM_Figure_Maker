@@ -1,16 +1,9 @@
-import os
-import sys
-from typing import Dict, List, Optional, Tuple, Callable
-from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
-                            QHBoxLayout, QLabel, QLineEdit, QTextEdit, QPushButton, 
-                            QFileDialog, QDialog, QGridLayout, QScrollArea, 
-                            QComboBox, QCheckBox, QGroupBox, QSpinBox, QMessageBox,
-                            QSizePolicy, QFrame)
-from PyQt5.QtGui import QPixmap, QPainter, QPen, QColor, QImage, QFont
+from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QGridLayout,
+                           QPushButton, QScrollArea, QComboBox, QCheckBox, QSizePolicy, QFrame, QMainWindow, QFileDialog)
+from PyQt5.QtGui import QPixmap, QPainter, QPen, QColor, QImage
 from PyQt5.QtCore import Qt, QRect, QSize, pyqtSignal, QRectF, QPoint
-
 from PIL import Image, ImageQt
-
+import os
 
 class ImageWidget(QWidget):
     """Widget to display a single image with metadata and optional bounding box"""
@@ -25,6 +18,7 @@ class ImageWidget(QWidget):
         self.show_metadata = True
         self.bounding_boxes = []  # List of (x1,y1,x2,y2) normalized coordinates
         self.box_colors = []      # List of QColor objects for each box
+        self.box_tooltips = []    # List of (rect, tooltip_text) pairs
         
         # For drawing mode
         self.drawing = False
@@ -32,14 +26,22 @@ class ImageWidget(QWidget):
         self.current_rect = None
         self.drawing_enabled = False
         
+        # For tooltips
+        self.tooltip_rect = None
+        self.tooltip_text = None
+        
         # Set up widget properties
         self.setMinimumSize(200, 200)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        
+        # Enable mouse tracking for tooltips
+        self.setMouseTracking(True)
         
     def set_image(self, image_path: str) -> None:
         """Set the image to display"""
         if os.path.exists(image_path):
             self.pixmap = QPixmap(image_path)
+            self.image_path = image_path  # Store the path for reference
             self.update()
         else:
             print(f"Warning: Image not found at {image_path}")
@@ -54,7 +56,7 @@ class ImageWidget(QWidget):
         self.show_metadata = show
         self.update()
     
-    def add_bounding_box(self, rect: Tuple[float, float, float, float], color: QColor = Qt.red) -> None:
+    def add_bounding_box(self, rect: tuple, color: QColor = Qt.red) -> None:
         """Add a bounding box to display on the image
         rect is (x1, y1, x2, y2) in normalized coordinates (0-1)
         """
@@ -86,10 +88,35 @@ class ImageWidget(QWidget):
             self.update()
     
     def mouseMoveEvent(self, event):
-        """Handle mouse move for drawing boxes"""
+        """Handle mouse move for drawing boxes and tooltips"""
         if self.drawing:
             self.current_rect = QRect(self.draw_start_pos, event.pos()).normalized()
             self.update()
+        else:
+            # Check if mouse is over a bounding box for tooltip
+            if self.pixmap and not self.pixmap.isNull() and self.scaled_pixmap:
+                # Get image position
+                x = (self.width() - self.scaled_pixmap.width()) / 2
+                y = (self.height() - self.scaled_pixmap.height()) / 2
+                
+                # Convert mouse position to normalized coordinates
+                norm_x = (event.x() - x) / self.scaled_pixmap.width()
+                norm_y = (event.y() - y) / self.scaled_pixmap.height()
+                
+                # Check if mouse is over any bounding box
+                for i, (rect, tooltip) in enumerate(self.box_tooltips):
+                    x1, y1, x2, y2 = rect
+                    if x1 <= norm_x <= x2 and y1 <= norm_y <= y2:
+                        self.tooltip_rect = rect
+                        self.tooltip_text = tooltip
+                        self.update()
+                        return
+                
+                # Mouse not over any box
+                if self.tooltip_text:
+                    self.tooltip_text = None
+                    self.tooltip_rect = None
+                    self.update()
     
     def mouseReleaseEvent(self, event):
         """Handle mouse release for drawing boxes"""
@@ -116,7 +143,7 @@ class ImageWidget(QWidget):
         painter.setRenderHint(QPainter.SmoothPixmapTransform)
         
         # Draw background
-        painter.fillRect(self.rect(), Qt.white)
+        painter.fillRect(self.rect(), Qt.lightGray)  # Light gray background instead of white
         
         # Draw image if available
         if self.pixmap and not self.pixmap.isNull():
@@ -152,11 +179,33 @@ class ImageWidget(QWidget):
             if self.current_rect:
                 painter.setPen(QPen(Qt.blue, 2, Qt.DashLine))
                 painter.drawRect(self.current_rect)
+                
+            # Draw tooltip if needed
+            if self.tooltip_text and self.tooltip_rect:
+                x1, y1, x2, y2 = self.tooltip_rect
+                
+                # Convert normalized coordinates to widget coordinates
+                box_x = int(x + x1 * self.scaled_pixmap.width())
+                box_y = int(y + y1 * self.scaled_pixmap.height())
+                
+                # Draw tooltip background
+                tooltip_rect = QRect(box_x, box_y - 30, 200, 30)
+                painter.fillRect(tooltip_rect, QColor(255, 255, 220, 230))  # Light yellow background
+                painter.setPen(QPen(Qt.black))
+                painter.drawRect(tooltip_rect)
+                
+                # Draw tooltip text
+                painter.drawText(tooltip_rect, Qt.AlignCenter, self.tooltip_text)
+        else:
+            # Draw placeholder text if no image
+            painter.setPen(Qt.darkGray)
+            painter.setFont(self.font())
+            painter.drawText(self.rect(), Qt.AlignCenter, "Click to load image")
         
-        # Draw metadata if enabled
+        # Draw metadata if enabled (now disabled by default since it's already in databar)
         if self.show_metadata and self.metadata_text:
             painter.setPen(Qt.black)
-            painter.setFont(QFont("Arial", 9))
+            painter.setFont(self.font())
             painter.drawText(10, self.height() - 10, self.metadata_text)
 
 
@@ -229,6 +278,9 @@ class ImageGridView(QWidget):
             if item.widget():
                 item.widget().deleteLater()
         
+        # Set small spacing between images
+        self.grid_layout.setSpacing(5)  # 5 pixel spacing between grid items
+        
         self.image_widgets = []
         
         # Create new grid of ImageWidget instances
@@ -247,19 +299,22 @@ class ImageGridView(QWidget):
         self.rows, self.cols = map(int, size_text.split('x'))
         self.setup_grid()
     
-    def set_images(self, image_paths: List[str], metadata_texts: List[str]) -> None:
+    def set_images(self, image_paths: list, metadata_texts: list) -> None:
         """Set images and metadata in the grid"""
-        for i, (widget, path) in enumerate(zip(self.image_widgets, image_paths)):
+        for i, widget in enumerate(self.image_widgets):
             if i < len(image_paths):
-                widget.set_image(path)
+                widget.set_image(image_paths[i])
                 if i < len(metadata_texts):
                     widget.set_metadata_text(metadata_texts[i])
     
-    def add_bounding_box(self, widget_index: int, rect: Tuple[float, float, float, float], 
-                         color: QColor = Qt.red) -> None:
+    def add_bounding_box(self, widget_index: int, rect: tuple, color: QColor = Qt.red, tooltip: str = None) -> None:
         """Add a bounding box to a specific image widget"""
         if 0 <= widget_index < len(self.image_widgets):
             self.image_widgets[widget_index].add_bounding_box(rect, color)
+            
+            # Add tooltip if provided
+            if tooltip:
+                self.image_widgets[widget_index].box_tooltips.append((rect, tooltip))
     
     def clear_all_bounding_boxes(self) -> None:
         """Clear all bounding boxes from all widgets"""
@@ -269,8 +324,9 @@ class ImageGridView(QWidget):
     def toggle_metadata(self, state: int) -> None:
         """Toggle metadata display for all widgets"""
         show = state == Qt.Checked
+        # Since metadata is already in databar, don't show duplicate info
         for widget in self.image_widgets:
-            widget.toggle_metadata(show)
+            widget.toggle_metadata(False)  # Always disable metadata overlay
     
     def toggle_drawing_mode(self, state: int) -> None:
         """Toggle box drawing mode for all widgets"""
@@ -281,7 +337,15 @@ class ImageGridView(QWidget):
     def on_box_drawn(self, rect: QRectF, row: int, col: int) -> None:
         """Handle box drawn signal from an image widget"""
         # This will be connected to the controller
-        pass
+        print(f"Box drawn at row {row}, col {col}: {rect.x():.2f}, {rect.y():.2f}, {rect.width():.2f}, {rect.height():.2f}")
+    
+    def clear_all(self) -> None:
+        """Clear all images"""
+        for widget in self.image_widgets:
+            widget.pixmap = None
+            widget.scaled_pixmap = None
+            widget.clear_bounding_boxes()
+            widget.update()
     
     def export_grid(self, file_path: str) -> bool:
         """Export the current grid as a PNG image"""
