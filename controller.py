@@ -33,3 +33,16 @@ class ScaleGridController:
         
         # Connect signals
         self.connect_signals()
+
+    def connect_signals(self):
+        """Connect UI signals to their handler methods"""
+        # File menu connections
+        self.main_window.menuBar().findChild(QAction, "Open Folder...").triggered.connect(self.open_folder)
+        self.main_window.menuBar().findChild(QAction, "Export Grid...").triggered.connect(self.export_grid)
+    
+        # Main window button connections
+        self.main_window.folder_button.clicked.connect(self.open_folder)
+        self.main_window.sample_info_button.clicked.connect(self.edit_sample_info)
+    
+        # Image grid connections
+        self.main_window.image_grid.export_button.clicked.connect(self.export_grid)
